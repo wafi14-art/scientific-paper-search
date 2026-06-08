@@ -1,0 +1,102 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  extensions = [pgvector(map: "vector")]
+}
+
+// User model linked to Supabase authentication
+model User {
+  id            String          @id // Supabase Auth User ID (UUID)
+  email         String          @unique
+  name          String?
+  role          String          @default("user")
+  createdAt     DateTime        @default(now())
+  updatedAt     DateTime        @updatedAt
+  searchHistory SearchHistory[]
+  papers        Paper[]
+
+  @@map("users")
+}
+
+// Paper metadata details
+model Paper {
+  id               String           @id @default(uuid())
+  title            String
+  abstract         String?          @db.Text
+  authors          String?
+  journal          String?
+  year             Int?
+  publicationYear  Int?
+  keywords         String?
+  pageCount        Int?
+  extractedText    String?          @db.Text
+  extractionStatus ExtractionStatus @default(PENDING)
+  embeddingStatus  EmbeddingStatus @default(PENDING)
+  embeddingModel   String?
+  embeddingDimensions Int?
+  pdfUrl           String           // Storage path for the PDF in Supabase Storage
+  uploadedBy       String?
+  uploadedByUser   User?            @relation(fields: [uploadedBy], references: [id], onDelete: Cascade)
+  createdAt        DateTime         @default(now())
+  updatedAt        DateTime         @updatedAt
+  embeddings       PaperEmbedding[]
+
+  @@index([uploadedBy])
+  @@map("papers")
+}
+
+enum ExtractionStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+enum EmbeddingStatus {
+  PENDING
+  PROCESSING
+  COMPLETED
+  FAILED
+}
+
+// Paper chunks and their vector embeddings (pgvector integration)
+model PaperEmbedding {
+  id         String   @id @default(uuid())
+  paperId    String
+  paper      Paper    @relation(fields: [paperId], references: [id], onDelete: Cascade)
+  chunkIndex Int
+  chunkText  String   @db.Text
+  modelName  String
+  dimensions Int
+  
+  // pgvector preparation:
+  // Using unsupported vector type for storing embeddings.
+  // Gemini text-embedding-004 model uses 768 dimensions.
+  // Note: If Gemini returns a different dimension count, adapt this type accordingly.
+  embedding  Unsupported("vector(768)")
+  
+  createdAt  DateTime @default(now())
+
+  @@index([paperId])
+  @@map("paper_embeddings")
+}
+
+// History of semantic and keyword searches performed by users
+model SearchHistory {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  query     String
+  filters   Json?    // Optional search filters (e.g. year range, authors)
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@map("search_histories")
+}
