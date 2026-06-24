@@ -90,13 +90,16 @@ model PaperEmbedding {
 
 // History of semantic and keyword searches performed by users
 model SearchHistory {
-  id        String   @id @default(uuid())
-  userId    String?
-  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
-  query     String
-  filters   Json?    // Optional search filters (e.g. year range, authors)
-  createdAt DateTime @default(now())
+  id                      String   @id @default(uuid())
+  userId                  String?
+  user                    User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  query                   String
+  filters                 Json?    // Optional search filters (e.g. year range, authors)
+  resultCount             Int      @default(0)
+  averageSimilarityScore  Float    @default(0)
+  createdAt               DateTime @default(now())
 
   @@index([userId])
   @@map("search_histories")
 }
+

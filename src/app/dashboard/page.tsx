@@ -1,35 +1,81 @@
 import React from "react";
 import { Metadata } from "next";
 import Link from "next/link";
-import { FileText, Search, Clock, ArrowUpRight, Plus, Database } from "lucide-react";
+import { redirect } from "next/navigation";
+import { FileText, Search, Clock, ArrowUpRight, Plus, Database, AlertCircle } from "lucide-react";
+import { createClient } from "@/lib/supabase/server";
+import { DashboardService } from "@/services/dashboard.service";
 
 export const metadata: Metadata = {
   title: "Dashboard",
   description: "Manage your research archive, view processed papers, and review search analytics.",
 };
 
-export default function DashboardPage() {
-  // Mock data for dashboard
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    redirect("/login");
+  }
+
+  let data;
+  try {
+    const dashboardService = new DashboardService();
+    const [overview, recentUploads, searchHistory] = await Promise.all([
+      dashboardService.getOverviewStats(),
+      dashboardService.getRecentUploads(),
+      dashboardService.getSearchHistory(1, 10),
+    ]);
+
+    data = {
+      overview,
+      recentUploads,
+      searchHistory: searchHistory.rows,
+    };
+  } catch (err) {
+    console.error("Failed to load dashboard data:", err);
+  }
+
+  if (!data) {
+    return (
+      <div className="flex-1 bg-muted/10 pb-12 flex flex-col items-center justify-center p-8">
+        <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-6 text-center max-w-md font-sans">
+          <AlertCircle className="h-10 w-10 text-destructive mx-auto mb-3" />
+          <h2 className="text-lg font-semibold text-foreground">Failed to load Dashboard</h2>
+          <p className="mt-2 text-sm text-muted-foreground">
+            There was an error connecting to the database. Please make sure migrations are deployed.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   const stats = [
-    { name: "Indexed Papers", value: "12", icon: FileText, change: "+3 this week" },
-    { name: "Semantic Searches", value: "148", icon: Search, change: "+24 today" },
-    { name: "Vector Dimension", value: "768d", icon: Database, change: "pgvector active" },
-  ];
-
-  const recentPapers = [
-    { id: "1", title: "Attention Is All You Need", authors: "Vaswani et al.", year: 2017, status: "Indexed" },
-    { id: "2", title: "BERT: Pre-training of Deep Bidirectional Transformers", authors: "Devlin et al.", year: 2018, status: "Indexed" },
-    { id: "3", title: "Retrieval-Augmented Generation for Knowledge-Intensive NLP", authors: "Lewis et al.", year: 2020, status: "Indexing" },
-  ];
-
-  const recentSearches = [
-    { query: "transformer architecture self-attention mechanisms", time: "10 minutes ago" },
-    { query: "dense passage retrieval vs sparse bm25", time: "2 hours ago" },
-    { query: "vector embeddings model similarity metrics", time: "1 day ago" },
+    {
+      name: "Indexed Papers",
+      value: String(data.overview.totalPapers),
+      icon: FileText,
+      change: `${data.overview.completedEmbeddings} embedded, ${data.overview.failedEmbeddings} failed`,
+    },
+    {
+      name: "Semantic Searches",
+      value: String(data.overview.totalSearches),
+      icon: Search,
+      change: `Avg. similarity: ${(data.overview.averageSimilarityScore * 100).toFixed(1)}%`,
+    },
+    {
+      name: "Vector Dimension",
+      value: "768d",
+      icon: Database,
+      change: "Gemini text-embedding-004 active",
+    },
   ];
 
   return (
-    <div className="flex-1 bg-muted/10 pb-12">
+    <div className="flex-1 bg-muted/10 pb-12 font-sans">
       {/* Dashboard Header */}
       <div className="border-b border-border bg-background py-6">
         <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -79,54 +125,76 @@ export default function DashboardPage() {
         {/* Workspace Sections */}
         <div className="grid grid-cols-1 gap-8 lg:grid-cols-3">
           {/* Recent Papers */}
-          <div className="lg:col-span-2 rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="lg:col-span-2 rounded-xl border border-border bg-card shadow-sm overflow-hidden flex flex-col">
             <div className="border-b border-border px-6 py-4 flex items-center justify-between">
               <h2 className="font-semibold text-foreground">Recent Papers</h2>
               <Link href="/papers" className="text-xs text-primary hover:underline flex items-center gap-0.5">
                 View all <ArrowUpRight className="h-3 w-3" />
               </Link>
             </div>
-            <div className="divide-y divide-border">
-              {recentPapers.map((paper) => (
-                <div key={paper.id} className="p-6 flex items-center justify-between hover:bg-muted/30 transition-colors">
-                  <div className="space-y-1 pr-4">
-                    <h3 className="font-medium text-sm text-foreground line-clamp-1">{paper.title}</h3>
-                    <p className="text-xs text-muted-foreground">
-                      {paper.authors} &bull; {paper.year}
-                    </p>
-                  </div>
-                  <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
-                    paper.status === "Indexed"
-                      ? "bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20"
-                      : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 animate-pulse"
-                  }`}>
-                    {paper.status}
-                  </span>
+            <div className="divide-y divide-border flex-1">
+              {data.recentUploads.length === 0 ? (
+                <div className="p-12 text-center text-sm text-muted-foreground flex flex-col items-center justify-center h-full">
+                  <FileText className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                  No papers uploaded yet.
                 </div>
-              ))}
+              ) : (
+                data.recentUploads.map((paper) => (
+                  <div key={paper.id} className="p-6 flex items-center justify-between hover:bg-muted/30 transition-colors">
+                    <div className="space-y-1 pr-4">
+                      <h3 className="font-medium text-sm text-foreground line-clamp-1">{paper.title}</h3>
+                      <p className="text-xs text-muted-foreground">
+                        Uploaded on {new Date(paper.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                    <span className={`inline-flex items-center rounded-full px-2 py-1 text-xs font-medium ${
+                      paper.extractionStatus === "COMPLETED" && paper.embeddingStatus === "COMPLETED"
+                        ? "bg-green-500/10 text-green-700 dark:text-green-400 border border-green-500/20"
+                        : paper.extractionStatus === "FAILED" || paper.embeddingStatus === "FAILED"
+                        ? "bg-destructive/10 text-destructive border border-destructive/20"
+                        : "bg-amber-500/10 text-amber-700 dark:text-amber-400 border border-amber-500/20 animate-pulse"
+                    }`}>
+                      {paper.extractionStatus === "COMPLETED" && paper.embeddingStatus === "COMPLETED"
+                        ? "Indexed"
+                        : paper.extractionStatus === "FAILED" || paper.embeddingStatus === "FAILED"
+                        ? "Failed"
+                        : "Processing"}
+                    </span>
+                  </div>
+                ))
+              )}
             </div>
           </div>
 
           {/* Search History */}
-          <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden">
+          <div className="rounded-xl border border-border bg-card shadow-sm overflow-hidden flex flex-col">
             <div className="border-b border-border px-6 py-4 flex items-center justify-between">
               <h2 className="font-semibold text-foreground">Search Activity</h2>
               <Link href="/search" className="text-xs text-primary hover:underline flex items-center gap-0.5">
                 New search <ArrowUpRight className="h-3 w-3" />
               </Link>
             </div>
-            <div className="divide-y divide-border">
-              {recentSearches.map((search, index) => (
-                <div key={index} className="p-6 flex gap-3 hover:bg-muted/30 transition-colors">
-                  <Clock className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
-                  <div className="space-y-1">
-                    <p className="text-sm text-foreground font-medium line-clamp-2 leading-relaxed">
-                      &quot;{search.query}&quot;
-                    </p>
-                    <p className="text-xs text-muted-foreground">{search.time}</p>
-                  </div>
+            <div className="divide-y divide-border flex-1">
+              {data.searchHistory.length === 0 ? (
+                <div className="p-12 text-center text-sm text-muted-foreground flex flex-col items-center justify-center h-full">
+                  <Search className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                  No search activity recorded yet.
                 </div>
-              ))}
+              ) : (
+                data.searchHistory.map((search) => (
+                  <div key={search.id} className="p-6 flex gap-3 hover:bg-muted/30 transition-colors">
+                    <Clock className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+                    <div className="space-y-1">
+                      <p className="text-sm text-foreground font-medium line-clamp-2 leading-relaxed">
+                        &quot;{search.query}&quot;
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        {search.resultCount} results &bull; {new Date(search.createdAt).toLocaleDateString()}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
             </div>
           </div>
         </div>

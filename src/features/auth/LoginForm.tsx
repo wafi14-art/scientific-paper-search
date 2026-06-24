@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Eye, EyeOff, KeyRound, Mail } from "lucide-react";
@@ -40,7 +40,6 @@ export function LoginForm() {
   const [form, setForm] = useState<LoginPayload>(initialForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
@@ -54,10 +53,11 @@ export function LoginForm() {
     setFormError(null);
   }
 
-  useEffect(() => {
-    if (searchParams?.get("registered") === "1") {
-      setSuccessMessage("Account created successfully. Please sign in.");
-    }
+  // Determine success message from URL params (avoid setState in effect)
+  const successMessage = useMemo(() => {
+    return searchParams?.get("registered") === "1"
+      ? "Account created successfully. Please sign in."
+      : null;
   }, [searchParams]);
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -72,7 +72,7 @@ export function LoginForm() {
 
     setIsSubmitting(true);
     setFormError(null);
-    setSuccessMessage(null);
+
 
     try {
       const { error } = await supabase.auth.signInWithPassword({
@@ -86,7 +86,6 @@ export function LoginForm() {
       }
 
       await refreshProfile();
-      setSuccessMessage("Signed in successfully. Redirecting...");
       router.push(getRedirectTarget());
       router.refresh();
     } catch (error) {

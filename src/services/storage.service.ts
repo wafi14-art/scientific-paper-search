@@ -4,16 +4,39 @@ import { getBucketConfigWarning } from "@/constants/storage";
 export class StorageService {
   private readonly client = createAdminClient();
 
+  private async ensureBucketExists(bucket: string): Promise<void> {
+    const { error } = await this.client.storage.createBucket(bucket, {
+      public: false,
+    });
+
+    if (error && !error.message.toLowerCase().includes("already exists")) {
+      throw error;
+    }
+  }
+
   async uploadPdf(bucket: string, path: string, file: Uint8Array | Blob): Promise<void> {
     const { error } = await this.client.storage.from(bucket).upload(path, file, {
       upsert: false,
       contentType: "application/pdf",
     });
 
-    if (error) {
+    if (!error) return;
+
+    if (error.message.toLowerCase().includes("bucket not found")) {
+      await this.ensureBucketExists(bucket);
+      const retryResult = await this.client.storage.from(bucket).upload(path, file, {
+        upsert: false,
+        contentType: "application/pdf",
+      });
+
+      if (!retryResult.error) return;
+
       const warning = getBucketConfigWarning(bucket);
-      throw new Error(`Failed to upload PDF file: ${error.message}. ${warning}`);
+      throw new Error(`Failed to upload PDF file after creating bucket: ${retryResult.error.message}. ${warning}`);
     }
+
+    const warning = getBucketConfigWarning(bucket);
+    throw new Error(`Failed to upload PDF file: ${error.message}. ${warning}`);
   }
 
   async deletePdf(bucket: string, path: string): Promise<void> {

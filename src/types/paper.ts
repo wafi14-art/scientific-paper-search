@@ -47,5 +47,25 @@ export interface SearchHistoryEntry {
   userId?: string | null;
   query: string;
   filters?: Record<string, unknown> | null;
+  resultCount: number;
+  averageSimilarityScore: number;
   createdAt: Date;
+}
+
+
+export interface SearchFilters {
+  publicationYear?: number;
+  author?: string;
+  keyword?: string;
+}
+
+export interface SearchResult {
+  paperId: string;
+  title: string;
+  authors: string[];
+  publicationYear?: number;
+  keywords: string[];
+  similarityScore: number;
+  extractionStatus: ExtractionStatus;
+  embeddingStatus: EmbeddingStatus;
 }

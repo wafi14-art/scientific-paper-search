@@ -31,7 +31,7 @@ export default function PaperDetailClient({ id }: { id: string }) {
     })();
   }, [id]);
 
-  if (loading) return <Alert>Loading paper details…</Alert>;
+  if (loading) return <Alert>Loading paper details...</Alert>;
   if (error) return <Alert variant="destructive">{error}</Alert>;
   if (!paper) return <Alert>Paper not found.</Alert>;
 
@@ -52,15 +52,15 @@ export default function PaperDetailClient({ id }: { id: string }) {
         <div>
           <h2 className="text-lg font-semibold">Metadata</h2>
           <ul className="mt-2 text-sm text-muted-foreground space-y-1">
-            <li>Authors: {paper.authors ?? "—"}</li>
-            <li>Journal: {paper.journal ?? "—"}</li>
-            <li>Year: {paper.publicationYear ?? paper.year ?? "—"}</li>
-            <li>Keywords: {paper.keywords ?? "—"}</li>
-            <li>Pages: {paper.pageCount ?? "—"}</li>
+            <li>Authors: {paper.authors ?? "-"}</li>
+            <li>Journal: {paper.journal ?? "-"}</li>
+            <li>Year: {paper.publicationYear ?? paper.year ?? "-"}</li>
+            <li>Keywords: {paper.keywords ?? "-"}</li>
+            <li>Pages: {paper.pageCount ?? "-"}</li>
             <li>Extraction Status: {paper.extractionStatus}</li>
             <li>Embedding Status: {paper.embeddingStatus}</li>
-            <li>Embedding Model: {paper.embeddingModel ?? "—"}</li>
-            <li>Embedding Dimensions: {paper.embeddingDimensions ?? "—"}</li>
+            <li>Embedding Model: {paper.embeddingModel ?? "-"}</li>
+            <li>Embedding Dimensions: {paper.embeddingDimensions ?? "-"}</li>
           </ul>
         </div>
 

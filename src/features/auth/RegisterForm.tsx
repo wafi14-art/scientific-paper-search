@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, KeyRound, Mail, User } from "lucide-react";
@@ -11,7 +11,7 @@ import { Label } from "@/components/ui/label";
 import { Spinner } from "@/components/ui/spinner";
 import { getAuthErrorMessage } from "@/features/auth/errors";
 import { validateRegister } from "@/features/auth/validation";
-import { createClient } from "@/lib/supabase/client";
+
 import type { RegisterPayload } from "@/types/auth";
 
 const initialForm: RegisterPayload = {
@@ -23,7 +23,6 @@ const initialForm: RegisterPayload = {
 
 export function RegisterForm() {
   const router = useRouter();
-  const supabase = useMemo(() => createClient(), []);
   const [form, setForm] = useState<RegisterPayload>(initialForm);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);

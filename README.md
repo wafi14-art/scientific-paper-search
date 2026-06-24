@@ -1,36 +1,80 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Scientific Paper Search System
 
-## Getting Started
+Production-ready Next.js application for uploading scientific PDFs, extracting metadata and text, generating Gemini embeddings, and searching papers with PostgreSQL pgvector.
 
-First, run the development server:
+## Architecture
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+```text
+User
+ |
+Next.js App Router UI
+ |
+API Layer
+ |
+Service Layer
+ |
+Repository Layer
+ |
+Supabase PostgreSQL + Storage
+ |
+Gemini Embedding
+ |
+pgvector Search
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Core Features
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+- Authentication with Supabase Auth.
+- PDF upload to private Supabase Storage.
+- Metadata and text extraction from uploaded PDFs.
+- Gemini `text-embedding-004` embedding generation.
+- pgvector-backed semantic and hybrid search.
+- Search analytics persisted to `SearchHistory`.
+- Dashboard metrics for papers, embeddings, and recent searches.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Database Summary
 
-## Learn More
+- `User`: application profile linked to Supabase Auth user IDs.
+- `Paper`: uploaded PDF metadata, extraction status, embedding status, and storage path.
+- `PaperEmbedding`: extracted text chunks with pgvector embeddings.
+- `SearchHistory`: user search query analytics, filters, result counts, and average similarity.
 
-To learn more about Next.js, take a look at the following resources:
+## Required Environment Variables
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```env
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+DATABASE_URL=
+DIRECT_URL=
+GEMINI_API_KEY=
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Optional:
 
-## Deploy on Vercel
+```env
+SUPABASE_STORAGE_BUCKET=papers
+GEMINI_API_URL=
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Keep `SUPABASE_SERVICE_ROLE_KEY`, `DATABASE_URL`, `DIRECT_URL`, and `GEMINI_API_KEY` server-only. Do not expose them in client components or public documentation.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## Production Checklist
+
+- Configure Supabase Auth site URL and redirect URLs for the production domain.
+- Confirm email provider settings in the Supabase dashboard.
+- Apply Prisma migrations to the production database.
+- Confirm the `pgvector` extension is enabled.
+- Confirm the private `papers` storage bucket exists.
+- Set all environment variables in the deployment provider.
+
+## Commands
+
+```bash
+npm run lint
+npm run build
+npx prisma validate
+npx prisma migrate status
+```
+
+`postinstall` runs `prisma generate` so fresh production installs generate Prisma Client before build/runtime.

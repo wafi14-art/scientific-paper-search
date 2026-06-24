@@ -1,5 +1,6 @@
 import prisma from "@/lib/prisma";
-import { EmbeddingStatus, ExtractionStatus, Paper, PaperEmbedding } from "@/types/paper";
+import { Prisma } from "@prisma/client";
+import { EmbeddingStatus, ExtractionStatus, Paper, PaperEmbedding, SearchResult } from "@/types/paper";
 
 export interface IPaperRepository {
   createPaper(paper: {
@@ -55,6 +56,22 @@ export interface IPaperRepository {
   getEmbeddingByPaperId(paperId: string): Promise<PaperEmbedding[]>;
 
   deletePaper(id: string): Promise<boolean>;
+
+  searchByVector(
+    embedding: number[],
+    limit: number
+  ): Promise<SearchResult[]>;
+
+  hybridSearch(
+    embedding: number[],
+    filters?: {
+      publicationYear?: number;
+      author?: string;
+      keyword?: string;
+    },
+    limit?: number,
+    offset?: number
+  ): Promise<{ results: SearchResult[]; total: number }>;
 }
 
 export class PrismaPaperRepository implements IPaperRepository {
@@ -211,5 +228,129 @@ export class PrismaPaperRepository implements IPaperRepository {
       console.error(`Failed to delete paper ${id}:`, error);
       return false;
     }
+  }
+
+  async searchByVector(embedding: number[], limit: number): Promise<SearchResult[]> {
+    const vectorText = `[${embedding.map((value) => Number(value)).join(",")}]`;
+
+    const results = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        title: string;
+        authors: string | null;
+        publicationYear: number | null;
+        keywords: string | null;
+        extractionStatus: string;
+        embeddingStatus: string;
+        similarity: number;
+      }>
+    >`
+      SELECT DISTINCT ON (p."id")
+        p."id",
+        p."title",
+        p."authors",
+        p."publicationYear",
+        p."keywords",
+        p."extractionStatus",
+        p."embeddingStatus",
+        1 - (pe."embedding" <=> ${vectorText}::vector) as "similarity"
+      FROM "papers" p
+      JOIN "paper_embeddings" pe ON p."id" = pe."paperId"
+      WHERE p."embeddingStatus" = 'COMPLETED'
+      ORDER BY p."id", "similarity" DESC
+      LIMIT ${limit}
+    `;
+
+    return results.map((result) => ({
+      paperId: result.id,
+      title: result.title,
+      authors: result.authors ? result.authors.split(",").map((a) => a.trim()) : [],
+      publicationYear: result.publicationYear ?? undefined,
+      keywords: result.keywords ? result.keywords.split(",").map((k) => k.trim()) : [],
+      similarityScore: Math.max(0, Math.min(1, Number(result.similarity))),
+      extractionStatus: result.extractionStatus as ExtractionStatus,
+      embeddingStatus: result.embeddingStatus as EmbeddingStatus,
+    }));
+  }
+
+  async hybridSearch(
+    embedding: number[],
+    filters?: {
+      publicationYear?: number;
+      author?: string;
+      keyword?: string;
+    },
+    limit = 10,
+    offset = 0
+  ): Promise<{ results: SearchResult[]; total: number }> {
+    const vectorText = `[${embedding.map((value) => Number(value)).join(",")}]`;
+
+    const filterConditions: Prisma.Sql[] = [];
+    if (filters?.publicationYear) {
+      filterConditions.push(Prisma.sql`p."publicationYear" = ${filters.publicationYear}`);
+    }
+    if (filters?.author) {
+      filterConditions.push(Prisma.sql`p."authors" ILIKE ${`%${filters.author}%`}`);
+    }
+    if (filters?.keyword) {
+      filterConditions.push(Prisma.sql`p."keywords" ILIKE ${`%${filters.keyword}%`}`);
+    }
+
+    const filterCondition =
+      filterConditions.length > 0
+        ? Prisma.sql`AND ${Prisma.join(filterConditions, " AND ")}`
+        : Prisma.empty;
+
+    // Get total count
+    const countResult = await prisma.$queryRaw<[{ count: number }]>`
+      SELECT COUNT(DISTINCT p."id")::int as count
+      FROM "papers" p
+      WHERE p."embeddingStatus" = 'COMPLETED'
+      ${filterCondition}
+    `;
+    const total = Number(countResult[0]?.count ?? 0);
+
+    // Get paginated results
+    const results = await prisma.$queryRaw<
+      Array<{
+        id: string;
+        title: string;
+        authors: string | null;
+        publicationYear: number | null;
+        keywords: string | null;
+        extractionStatus: string;
+        embeddingStatus: string;
+        similarity: number;
+      }>
+    >`
+      SELECT DISTINCT ON (p."id")
+        p."id",
+        p."title",
+        p."authors",
+        p."publicationYear",
+        p."keywords",
+        p."extractionStatus",
+        p."embeddingStatus",
+        1 - (pe."embedding" <=> ${vectorText}::vector) as "similarity"
+      FROM "papers" p
+      JOIN "paper_embeddings" pe ON p."id" = pe."paperId"
+      WHERE p."embeddingStatus" = 'COMPLETED'
+      ${filterCondition}
+      ORDER BY p."id", "similarity" DESC
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+
+    const searchResults = results.map((result) => ({
+      paperId: result.id,
+      title: result.title,
+      authors: result.authors ? result.authors.split(",").map((a) => a.trim()) : [],
+      publicationYear: result.publicationYear ?? undefined,
+      keywords: result.keywords ? result.keywords.split(",").map((k) => k.trim()) : [],
+      similarityScore: Math.max(0, Math.min(1, Number(result.similarity))),
+      extractionStatus: result.extractionStatus as ExtractionStatus,
+      embeddingStatus: result.embeddingStatus as EmbeddingStatus,
+    }));
+
+    return { results: searchResults, total };
   }
 }
